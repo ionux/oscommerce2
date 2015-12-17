@@ -5,7 +5,7 @@
   osCommerce, Open Source E-Commerce Solutions
   http://www.oscommerce.com
 
-  Copyright (c) 2013 osCommerce
+  Copyright (c) 2014 osCommerce
 
   Released under the GNU General Public License
 */
@@ -23,7 +23,7 @@
     }
 
     function pass() {
-      $request = $this->getHttpRequest(tep_href_link('backups/', '', 'NONSSL'));
+      $request = $this->getHttpRequest(tep_href_link('backups/'));
 
       return $request['http_code'] != 200;
     }
@@ -33,7 +33,6 @@
     }
 
     function getHttpRequest($url) {
-      global $HTTP_SERVER_VARS;
 
       $server = parse_url($url);
 
@@ -54,8 +53,8 @@
       curl_setopt($curl, CURLOPT_CUSTOMREQUEST, 'HEAD');
       curl_setopt($curl, CURLOPT_NOBODY, true);
 
-      if ( isset($HTTP_SERVER_VARS['PHP_AUTH_USER']) && isset($HTTP_SERVER_VARS['PHP_AUTH_PW']) ) {
-        curl_setopt($curl, CURLOPT_USERPWD, $HTTP_SERVER_VARS['PHP_AUTH_USER'] . ':' . $HTTP_SERVER_VARS['PHP_AUTH_PW']);
+      if ( isset($_SERVER['PHP_AUTH_USER']) && isset($_SERVER['PHP_AUTH_PW']) ) {
+        curl_setopt($curl, CURLOPT_USERPWD, $_SERVER['PHP_AUTH_USER'] . ':' . $_SERVER['PHP_AUTH_PW']);
 
         $this->type = 'warning';
       }

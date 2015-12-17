@@ -5,42 +5,71 @@
   osCommerce, Open Source E-Commerce Solutions
   http://www.oscommerce.com
 
-  Copyright (c) 2010 osCommerce
+  Copyright (c) 2015 osCommerce
 
   Released under the GNU General Public License
 */
 
+  use OSC\OM\HTML;
+  use OSC\OM\OSCOM;
+  use OSC\OM\Registry;
+
   require('includes/application_top.php');
 
-  require(DIR_WS_LANGUAGES . $language . '/' . FILENAME_LOGOFF);
+  require(DIR_WS_LANGUAGES . $_SESSION['language'] . '/logoff.php');
 
   $breadcrumb->add(NAVBAR_TITLE);
 
-  tep_session_unregister('customer_id');
-  tep_session_unregister('customer_default_address_id');
-  tep_session_unregister('customer_first_name');
-  tep_session_unregister('customer_country_id');
-  tep_session_unregister('customer_zone_id');
-  tep_session_unregister('comments');
+  unset($_SESSION['customer_id']);
+  unset($_SESSION['customer_default_address_id']);
+  unset($_SESSION['customer_first_name']);
+  unset($_SESSION['customer_country_id']);
+  unset($_SESSION['customer_zone_id']);
 
-  $cart->reset();
+  if ( isset($_SESSION['sendto']) ) {
+    unset($_SESSION['sendto']);
+  }
 
-  require(DIR_WS_INCLUDES . 'template_top.php');
+  if ( isset($_SESSION['billto']) ) {
+    unset($_SESSION['billto']);
+  }
+
+  if ( isset($_SESSION['shipping']) ) {
+    unset($_SESSION['shipping']);
+  }
+
+  if ( isset($_SESSION['payment']) ) {
+    unset($_SESSION['payment']);
+  }
+
+  if ( isset($_SESSION['comments']) ) {
+    unset($_SESSION['comments']);
+  }
+
+  $_SESSION['cart']->reset();
+
+  Registry::get('Hooks')->call('Account', 'Logout');
+
+  require('includes/template_top.php');
 ?>
 
-<h1><?php echo HEADING_TITLE; ?></h1>
+<div class="page-header">
+  <h1><?php echo HEADING_TITLE; ?></h1>
+</div>
 
 <div class="contentContainer">
   <div class="contentText">
-    <?php echo TEXT_MAIN; ?>
+    <div class="alert alert-danger">
+      <?php echo TEXT_MAIN; ?>
+    </div>
   </div>
 
-  <div class="buttonSet">
-    <span class="buttonAction"><?php echo tep_draw_button(IMAGE_BUTTON_CONTINUE, 'triangle-1-e', tep_href_link(FILENAME_DEFAULT)); ?></span>
+  <div class="text-right">
+    <?php echo HTML::button(IMAGE_BUTTON_CONTINUE, 'glyphicon glyphicon-chevron-right', OSCOM::link('index.php')); ?>
   </div>
 </div>
 
 <?php
-  require(DIR_WS_INCLUDES . 'template_bottom.php');
-  require(DIR_WS_INCLUDES . 'application_bottom.php');
+  require('includes/template_bottom.php');
+  require('includes/application_bottom.php');
 ?>

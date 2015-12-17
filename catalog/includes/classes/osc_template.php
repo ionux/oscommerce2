@@ -5,17 +5,21 @@
   osCommerce, Open Source E-Commerce Solutions
   http://www.oscommerce.com
 
-  Copyright (c) 2010 osCommerce
+  Copyright (c) 2015 osCommerce
 
   Released under the GNU General Public License
 */
 
+  use OSC\OM\Apps;
+
   class oscTemplate {
     var $_title;
     var $_blocks = array();
-    var $_grid_container_width = 24;
-    var $_grid_content_width = 16;
-    var $_grid_column_width = 4;
+    var $_content = array();
+    var $_grid_container_width = 12;
+    var $_grid_content_width = BOOTSTRAP_CONTENT;
+    var $_grid_column_width = 0; // deprecated
+    var $_data = array();
 
     function oscTemplate() {
       $this->_title = TITLE;
@@ -42,7 +46,7 @@
     }
 
     function getGridColumnWidth() {
-      return $this->_grid_column_width;
+      return (12 - BOOTSTRAP_CONTENT) / 2;
     }
 
     function setTitle($title) {
@@ -68,8 +72,6 @@
     }
 
     function buildBlocks() {
-      global $language;
-
       if ( defined('TEMPLATE_BLOCK_GROUPS') && tep_not_null(TEMPLATE_BLOCK_GROUPS) ) {
         $tbgroups_array = explode(';', TEMPLATE_BLOCK_GROUPS);
 
@@ -80,11 +82,11 @@
             $modules_array = explode(';', constant($module_key));
 
             foreach ( $modules_array as $module ) {
-              $class = substr($module, 0, strrpos($module, '.'));
+              $class = basename($module, '.php');
 
               if ( !class_exists($class) ) {
-                if ( file_exists(DIR_WS_LANGUAGES . $language . '/modules/' . $group . '/' . $module) ) {
-                  include(DIR_WS_LANGUAGES . $language . '/modules/' . $group . '/' . $module);
+                if ( file_exists(DIR_WS_LANGUAGES . $_SESSION['language'] . '/modules/' . $group . '/' . $module) ) {
+                  include(DIR_WS_LANGUAGES . $_SESSION['language'] . '/modules/' . $group . '/' . $module);
                 }
 
                 if ( file_exists(DIR_WS_MODULES . $group . '/' . $class . '.php') ) {
@@ -103,6 +105,78 @@
           }
         }
       }
+    }
+
+    function addContent($content, $group) {
+      $this->_content[$group][] = $content;
+    }
+
+    function hasContent($group) {
+      return (isset($this->_content[$group]) && !empty($this->_content[$group]));
+    }
+
+    function getContent($group) {
+      if ( !class_exists('tp_' . $group) && file_exists(DIR_WS_MODULES . 'pages/tp_' . $group . '.php') ) {
+        include(DIR_WS_MODULES . 'pages/tp_' . $group . '.php');
+      }
+
+      if ( class_exists('tp_' . $group) ) {
+        $template_page_class = 'tp_' . $group;
+        $template_page = new $template_page_class();
+        $template_page->prepare();
+      }
+
+      foreach ( $this->getContentModules($group) as $module ) {
+        if (strpos($module, '\\') !== false) {
+          $class = Apps::getModuleClass($group . '/' . $module, 'Content');
+
+          $mb = new $class();
+
+          if ( $mb->isEnabled() ) {
+            $mb->execute();
+          }
+        } else {
+          if ( !class_exists($module) ) {
+            if ( file_exists(DIR_WS_MODULES . 'content/' . $group . '/' . $module . '.php') ) {
+              if ( file_exists(DIR_WS_LANGUAGES . $_SESSION['language'] . '/modules/content/' . $group . '/' . $module . '.php') ) {
+                include(DIR_WS_LANGUAGES . $_SESSION['language'] . '/modules/content/' . $group . '/' . $module . '.php');
+              }
+
+              include(DIR_WS_MODULES . 'content/' . $group . '/' . $module . '.php');
+            }
+          }
+
+          if ( class_exists($module) ) {
+            $mb = new $module();
+
+            if ( $mb->isEnabled() ) {
+              $mb->execute();
+            }
+          }
+        }
+      }
+
+      if ( class_exists('tp_' . $group) ) {
+        $template_page->build();
+      }
+
+      if ($this->hasContent($group)) {
+        return implode("\n", $this->_content[$group]);
+      }
+    }
+
+    function getContentModules($group) {
+      $result = array();
+
+      foreach ( explode(';', MODULE_CONTENT_INSTALLED) as $m ) {
+        $module = explode('/', $m, 2);
+
+        if ( $module[0] == $group ) {
+          $result[] = $module[1];
+        }
+      }
+
+      return $result;
     }
   }
 ?>

@@ -5,21 +5,15 @@
   osCommerce, Open Source E-Commerce Solutions
   http://www.oscommerce.com
 
-  Copyright (c) 2013 osCommerce
+  Copyright (c) 2015 osCommerce
 
   Released under the GNU General Public License
 */
 
-  if ( (PHP_VERSION >= 4.3) && ((bool)ini_get('register_globals') == false) ) {
-    @ini_set('session.bug_compat_42', 1);
-    @ini_set('session.bug_compat_warn', 0);
-  }
+  use OSC\OM\OSCOM;
+  use OSC\OM\Registry;
 
   if (STORE_SESSIONS == 'mysql') {
-    if (!$SESS_LIFE = get_cfg_var('session.gc_maxlifetime')) {
-      $SESS_LIFE = 1440;
-    }
-
     function _sess_open($save_path, $session_name) {
       return true;
     }
@@ -29,74 +23,84 @@
     }
 
     function _sess_read($key) {
-      $value_query = tep_db_query("select value from " . TABLE_SESSIONS . " where sesskey = '" . tep_db_input($key) . "' and expiry > '" . time() . "'");
-      $value = tep_db_fetch_array($value_query);
+      $OSCOM_Db = Registry::get('Db');
 
-      if (isset($value['value'])) {
-        return $value['value'];
+      $Qsession = $OSCOM_Db->prepare('select value from :table_sessions where sesskey = :sesskey');
+      $Qsession->bindValue(':sesskey', $key);
+      $Qsession->execute();
+
+      if ($Qsession->fetch() !== false) {
+        return $Qsession->value('value');
       }
 
       return '';
     }
 
-    function _sess_write($key, $val) {
-      global $SESS_LIFE;
+    function _sess_write($key, $value) {
+      $OSCOM_Db = Registry::get('Db');
 
-      $expiry = time() + $SESS_LIFE;
-      $value = $val;
+      $Qcheck = $OSCOM_Db->prepare('select 1 from :table_sessions where sesskey = :sesskey');
+      $Qcheck->bindValue(':sesskey', $key);
+      $Qcheck->execute();
 
-      $check_query = tep_db_query("select count(*) as total from " . TABLE_SESSIONS . " where sesskey = '" . tep_db_input($key) . "'");
-      $check = tep_db_fetch_array($check_query);
-
-      if ($check['total'] > 0) {
-        return tep_db_query("update " . TABLE_SESSIONS . " set expiry = '" . tep_db_input($expiry) . "', value = '" . tep_db_input($value) . "' where sesskey = '" . tep_db_input($key) . "'");
+      if ($Qcheck->fetch() !== false) {
+        return $OSCOM_Db->save('sessions', ['expiry' => time(), 'value' => $value], ['sesskey' => $key]);
       } else {
-        return tep_db_query("insert into " . TABLE_SESSIONS . " values ('" . tep_db_input($key) . "', '" . tep_db_input($expiry) . "', '" . tep_db_input($value) . "')");
+        return $OSCOM_Db->save('sessions', ['sesskey' => $key, 'expiry' => time(), 'value' => $value]);
       }
     }
 
     function _sess_destroy($key) {
-      return tep_db_query("delete from " . TABLE_SESSIONS . " where sesskey = '" . tep_db_input($key) . "'");
+      $OSCOM_Db = Registry::get('Db');
+
+      return $OSCOM_Db->delete('sessions', ['sesskey' => $key]);
     }
 
     function _sess_gc($maxlifetime) {
-      tep_db_query("delete from " . TABLE_SESSIONS . " where expiry < '" . time() . "'");
+      $OSCOM_Db = Registry::get('Db');
 
-      return true;
+      $Qdel = $OSCOM_Db->prepare('delete from :table_sessions where expiry < :expiry');
+      $Qdel->bindValue(':expiry', time() - $maxlifetime);
+      $Qdel->execute();
+
+      return $Qdel->rowCount();
     }
 
     session_set_save_handler('_sess_open', '_sess_close', '_sess_read', '_sess_write', '_sess_destroy', '_sess_gc');
   }
 
   function tep_session_start() {
-    global $HTTP_GET_VARS, $HTTP_POST_VARS, $HTTP_COOKIE_VARS;
-
     $sane_session_id = true;
 
-    if (isset($HTTP_GET_VARS[tep_session_name()])) {
-      if (preg_match('/^[a-zA-Z0-9,-]+$/', $HTTP_GET_VARS[tep_session_name()]) == false) {
-        unset($HTTP_GET_VARS[tep_session_name()]);
+    if ( isset($_GET[session_name()]) ) {
+      if ( (SESSION_FORCE_COOKIE_USE == 'True') || (preg_match('/^[a-zA-Z0-9,-]+$/', $_GET[session_name()]) == false) ) {
+        unset($_GET[session_name()]);
 
         $sane_session_id = false;
       }
-    } elseif (isset($HTTP_POST_VARS[tep_session_name()])) {
-      if (preg_match('/^[a-zA-Z0-9,-]+$/', $HTTP_POST_VARS[tep_session_name()]) == false) {
-        unset($HTTP_POST_VARS[tep_session_name()]);
+    }
+
+    if ( isset($_POST[session_name()]) ) {
+      if ( (SESSION_FORCE_COOKIE_USE == 'True') || (preg_match('/^[a-zA-Z0-9,-]+$/', $_POST[session_name()]) == false) ) {
+        unset($_POST[session_name()]);
 
         $sane_session_id = false;
       }
-    } elseif (isset($HTTP_COOKIE_VARS[tep_session_name()])) {
-      if (preg_match('/^[a-zA-Z0-9,-]+$/', $HTTP_COOKIE_VARS[tep_session_name()]) == false) {
+    }
+
+    if ( isset($_COOKIE[session_name()]) ) {
+      if ( preg_match('/^[a-zA-Z0-9,-]+$/', $_COOKIE[session_name()]) == false ) {
         $session_data = session_get_cookie_params();
 
-        setcookie(tep_session_name(), '', time()-42000, $session_data['path'], $session_data['domain']);
+        setcookie(session_name(), '', time()-42000, $session_data['path'], $session_data['domain']);
+        unset($_COOKIE[session_name()]);
 
         $sane_session_id = false;
       }
     }
 
     if ($sane_session_id == false) {
-      tep_redirect(tep_href_link(FILENAME_DEFAULT, '', 'NONSSL', false));
+      OSCOM::redirect('index.php', '', 'NONSSL', false);
     }
 
     register_shutdown_function('session_write_close');
@@ -104,89 +108,28 @@
     return session_start();
   }
 
-  function tep_session_register($variable) {
-    global $session_started;
-
-    if ($session_started == true) {
-      if (PHP_VERSION < 4.3) {
-        return session_register($variable);
-      } else {
-        if (!isset($GLOBALS[$variable])) {
-          $GLOBALS[$variable] = null;
-        }
-
-        $_SESSION[$variable] =& $GLOBALS[$variable];
-      }
-    }
-
-    return false;
-  }
-
-  function tep_session_is_registered($variable) {
-    if (PHP_VERSION < 4.3) {
-      return session_is_registered($variable);
-    } else {
-      return isset($_SESSION) && array_key_exists($variable, $_SESSION);
-    }
-  }
-
-  function tep_session_unregister($variable) {
-    if (PHP_VERSION < 4.3) {
-      return session_unregister($variable);
-    } else {
-      unset($_SESSION[$variable]);
-    }
-  }
-
-  function tep_session_id($sessid = '') {
-    if (!empty($sessid)) {
-      return session_id($sessid);
-    } else {
-      return session_id();
-    }
-  }
-
-  function tep_session_name($name = '') {
-    if (!empty($name)) {
-      return session_name($name);
-    } else {
-      return session_name();
-    }
-  }
-
-  function tep_session_close() {
-    if (PHP_VERSION >= '4.0.4') {
-      return session_write_close();
-    } elseif (function_exists('session_close')) {
-      return session_close();
-    }
-  }
-
   function tep_session_destroy() {
-    return session_destroy();
-  }
+    if ( isset($_COOKIE[session_name()]) ) {
+      $session_data = session_get_cookie_params();
 
-  function tep_session_save_path($path = '') {
-    if (!empty($path)) {
-      return session_save_path($path);
-    } else {
-      return session_save_path();
+      setcookie(session_name(), '', time()-42000, $session_data['path'], $session_data['domain']);
+      unset($_COOKIE[session_name()]);
     }
+
+    return session_destroy();
   }
 
   function tep_session_recreate() {
     global $SID;
 
-    if (PHP_VERSION >= 5.1) {
       $old_id = session_id();
 
       session_regenerate_id(true);
 
       if (!empty($SID)) {
-        $SID = tep_session_name() . '=' . tep_session_id();
+        $SID = session_name() . '=' . session_id();
       }
 
-      tep_whos_online_update_session_id($old_id, tep_session_id());
-    }
+      tep_whos_online_update_session_id($old_id, session_id());
   }
 ?>

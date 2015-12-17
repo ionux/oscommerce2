@@ -5,16 +5,22 @@
   osCommerce, Open Source E-Commerce Solutions
   http://www.oscommerce.com
 
-  Copyright (c) 2007 osCommerce
+  Copyright (c) 2015 osCommerce
 
   Released under the GNU General Public License
 */
 
-// Set the level of error reporting
-  error_reporting(E_ALL & ~E_NOTICE);
+  use OSC\OM\OSCOM;
 
-  require('includes/functions/compatibility.php');
-  require('includes/functions/general.php');
-  require('includes/functions/database.php');
-  require('includes/functions/html_output.php');
+// set the level of error reporting
+  error_reporting(E_ALL | E_STRICT);
+  ini_set('display_errors', true); // TODO remove on release
+
+  define('OSCOM_BASE_DIR', realpath(__DIR__ . '/../../includes/') . '/');
+
+  require(OSCOM_BASE_DIR . 'OSC/OM/OSCOM.php');
+  spl_autoload_register('OSC\OM\OSCOM::autoload');
+
+  OSCOM::initialize();
+  OSCOM::setSite('Setup');
 ?>
